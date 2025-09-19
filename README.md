@@ -3,8 +3,7 @@
 Contains code for basic implementation for the game of <b>Jeopardy.</b>
 
 
-<b>Setup</b>
-    <b>copy the .env_example file to .env, and fill all required fields.</b>
+    <b>To run locally - copy the .env_example file to .env, and fill all required fields.</b>
 
     0. Run the ingestion script. It's a one time script that downloads the dataset, filters it, creates a Postgres database, and table, and stores  it inside it. To run the ingestion set your PYTHONPATh to the root of the project
         $env:PYTHONPATH = "C:\<your_path_here>\proj_twinknowledge_interview"
