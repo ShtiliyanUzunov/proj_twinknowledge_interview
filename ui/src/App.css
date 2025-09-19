@@ -39,3 +39,58 @@
 .read-the-docs {
   color: #888;
 }
+
+.info-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.info-table th {
+  background: #f7f7f9;
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+.info-table td {
+  padding: 8px 12px;
+  text-align: left;
+  color: #555;
+}
+
+.info-table tr:not(:last-child) td,
+.info-table tr:not(:last-child) th {
+  border-bottom: 1px solid #eee;
+}
+
+.submit-btn {
+  background-color: #4CAF50; /* greenish */
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  font-size: 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.submit-btn:hover {
+  background-color: #45a049; /* darker on hover */
+}
+
+.submit-btn:active {
+  transform: scale(0.97); /* click feedback */
+}
+
+.validationBlock {
+  padding: 10px;
+  font-size: 40px;
+}

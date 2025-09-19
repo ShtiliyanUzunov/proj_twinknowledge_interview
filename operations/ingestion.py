@@ -61,12 +61,12 @@ def create_database_and_questions_table():
         raise RuntimeError("DB_NAME is not set in environment/.env")
 
     # Connect to default 'postgres' database to create target db if needed
-    admin_db = Database.get_for("postgres")
-    exists = admin_db.execute(
+    db = Database.get_for("postgres")
+    exists = db.execute(
         "SELECT 1 FROM pg_database WHERE datname = :name", {"name": db_name}
     ).scalar() is not None
     if not exists:
-        admin_db.execute(f"CREATE DATABASE \"{db_name}\"", autocommit=True)
+        db.execute(f"CREATE DATABASE \"{db_name}\"", autocommit=True)
         print(f"Created database: {db_name}")
     else:
         print(f"Database already exists: {db_name}")

@@ -21,7 +21,8 @@ class Database:
 
     def __init__(self, db_name: str):
         self._db_name = db_name
-        self._engine = create_engine(_build_db_url(db_name), future=True)
+        url = _build_db_url(db_name)
+        self._engine = create_engine(url, future=True)
         self._SessionLocal = sessionmaker(bind=self._engine, expire_on_commit=False, future=True)
 
     @classmethod
