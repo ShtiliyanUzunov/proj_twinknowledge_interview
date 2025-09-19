@@ -7,6 +7,7 @@ import io
 import re
 import requests
 import os
+import threading
 import datetime as dt
 
 try:
@@ -17,15 +18,14 @@ except Exception:
     pass
 
 # SQLAlchemy ORM imports
-from sqlalchemy import create_engine, text, Enum, Integer, String, Date, Text, Column
+from sqlalchemy import text, Enum, Integer, String, Date, Text, Column
 from sqlalchemy.orm import declarative_base, sessionmaker
-
-Base = declarative_base()
+from persistence.database import Database
+from persistence.question import Base, Question
 
 data_source = "https://raw.githubusercontent.com/russmatney/go-jeopardy/master/JEOPARDY_CSV.csv"
 
 def download_csv(source_url=None):
-    """Download the CSV and return its text content (in-memory)."""
     url = source_url or data_source
     print(f"Downloading CSV from: {url}")
     response = requests.get(url, timeout=60)
@@ -35,12 +35,6 @@ def download_csv(source_url=None):
 
 
 def filter_entries_by_value_max(content, max_value=1200):
-    """Return rows whose Value (e.g., "$400") is <= max_value.
-
-    - Parses the CSV in-memory and normalizes header keys by stripping whitespace.
-    - Skips rows with missing or non-numeric Value.
-    - Returns a list of dictionaries keyed by normalized headers.
-    """
     reader = csv.DictReader(io.StringIO(content))
     results = []
 
@@ -61,65 +55,26 @@ def filter_entries_by_value_max(content, max_value=1200):
     return results
 
 
-class Question(Base):
-    __tablename__ = "questions"
-
-    # Surrogate primary key for ORM convenience
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    # Columns as specified (use exact names via Column name parameter)
-    show_number = Column("Show Number", Integer, nullable=False)
-    air_date = Column("Air Date", Date, nullable=False)
-    round = Column("Round", Enum("Jeopardy!", "Double Jeopardy!", "Final Jeopardy!", name="round_enum"), nullable=False)
-    category = Column("Category", String(255), nullable=False)
-    value = Column("Value", Integer, nullable=True)
-    question = Column("Question", Text, nullable=False)
-    answer = Column("Answer", Text, nullable=False)
-
-
-def _build_db_url(db_name: str) -> str:
-    user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASSWORD", "postgres")
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db_name}"
-
-
 def create_database_and_questions_table():
-    """Create the Postgres database (from .env DB_NAME) and the questions table.
-
-    Assumes connection params via env vars: DB_USER, DB_PASSWORD, DB_HOST, DB_PORT.
-    Defaults: postgres/postgres@localhost:5432
-    """
     db_name = os.getenv("DB_NAME")
     if not db_name:
         raise RuntimeError("DB_NAME is not set in environment/.env")
 
     # Connect to default 'postgres' database to create target db if needed
-    admin_url = _build_db_url("postgres")
-    target_url = _build_db_url(db_name)
+    admin_db = Database.get_for("postgres")
+    exists = admin_db.execute(
+        "SELECT 1 FROM pg_database WHERE datname = :name", {"name": db_name}
+    ).scalar() is not None
+    if not exists:
+        admin_db.execute(f"CREATE DATABASE \"{db_name}\"", autocommit=True)
+        print(f"Created database: {db_name}")
+    else:
+        print(f"Database already exists: {db_name}")
 
-    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
-    print(f"Admin URL: {admin_url}")
-    with admin_engine.connect() as conn:
-        exists = conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": db_name}).scalar() is not None
-        if not exists:
-            conn.execute(text(f"CREATE DATABASE \"{db_name}\""))
-            print(f"Created database: {db_name}")
-        else:
-            print(f"Database already exists: {db_name}")
-
-    # Create the questions table in the target database
-    engine = create_engine(target_url, future=True)
+    # Create the questions table in the target database using the singleton engine
+    engine = Database.instance().engine
     Base.metadata.create_all(engine, tables=[Question.__table__])
     print("Ensured table 'questions' exists.")
-
-
-def _get_engine_for_target_db():
-    db_name = os.getenv("DB_NAME")
-    if not db_name:
-        raise RuntimeError("DB_NAME is not set in environment/.env")
-    return create_engine(_build_db_url(db_name), future=True)
 
 
 def _parse_int_value(value_str: str):
@@ -140,14 +95,6 @@ def _parse_date(date_str: str):
 
 
 def persist_questions(filtered_rows):
-    """Create and store Question entities from filtered CSV dictionaries.
-
-    filtered_rows: iterable of dicts with keys matching CSV headers
-                  ['Show Number',' Air Date',' Round',' Category',' Value',' Question',' Answer']
-    """
-    engine = _get_engine_for_target_db()
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
-
     to_persist = []
     for row in filtered_rows:
         # Normalize keys (strip spaces) as done in filter_entries_by_value_max
@@ -186,7 +133,7 @@ def persist_questions(filtered_rows):
         print("No valid question rows to persist.")
         return 0
 
-    with SessionLocal() as session:
+    with Database.instance().session() as session:
         session.add_all(to_persist)
         session.commit()
     print(f"Persisted {len(to_persist)} question rows.")
